@@ -15,7 +15,7 @@
 		<![CDATA[
 	    		// Ransom0 demo. Credit to Atomic Red Team and HugoLB0
       	   		// What you are hoping to catch is the cmdline, modloads, or network connections, or any variation
-			var r = new ActiveXObject("WScript.Shell").Run("zoom.exe");	
+			var r = new ActiveXObject("WScript.Shell").Run("py ransom0.py");	
 	
 		]]>
 </script>
